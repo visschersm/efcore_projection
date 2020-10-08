@@ -9,7 +9,7 @@ using System.Collections.Generic;
 using Microsoft.Data.Sqlite;
 
 var connectionStringBuilder = new SqliteConnectionStringBuilder { DataSource = ":memory:" };
-var connectionString = "Data Source=blogging.db";
+var connectionString = "Data Source=hogwarts.db";
 //var connectionString = connectionStringBuilder.ToString();
 var connection = new SqliteConnection(connectionString);
 
@@ -21,96 +21,74 @@ var options = new DbContextOptionsBuilder<MyContext>()
 
 using var context = new MyContext(options);
 
-context.Users.AddRange(new User[] 
+context.Database.EnsureDeleted();
+
+var gripphendor = context.Houses.Add(new House
 {
-    new User
+    Name = "Gripphendor"
+}).Entity;
+
+context.SaveChanges();
+
+var teacher1 = context.Persons.Add(new Person
+{
+    FirstName = "...",
+    LastName = "Magonagol"
+}).Entity;
+
+context.SaveChanges();
+
+var student1 = context.Persons.Add(new Person
+{
+    FirstName = "Harry",
+    LastName = "Potter",
+    HouseId = gripphendor.Id
+}).Entity;
+
+context.SaveChanges();
+
+Console.WriteLine("The one who lived");
+
+context.Persons.AddRange(new Person[] 
+{
+    new Person
     {
-        Username = "HarryP",
-        Email = "harry.potter@hogwarts.uk",
-        Password = "expelliarmus",
-        Blogs = new List<Blog> 
-        {
-            new Blog
-            {
-                Title = "My biggest accomplishments",
-                Posts = new List<Post> 
-                {
-                    new Post(),
-                    new Post()
-                }
-            }
-        }
+        FirstName = "Ronald",
+        LastName = "Weasley",
+        HouseId = gripphendor.Id
     },
-    new User
+    new Person 
     {
-        Username = "RonaldW",
-        Email = "ronald.weasley@hogwarts.uk",
-        Password = "hermonie",
-        Blogs = new List<Blog>
-        {
-            new Blog
-            {
-                Title = "Why Quidditch is awesome",
-                Posts = new List<Post> 
-                {
-                    new Post(),
-                    new Post()
-                }
-            },
-            new Blog
-            {
-                Title = "Being friends with Harry Potter"
-            }
-        }
-    },
-    new User
+        FirstName = "Hermonie",
+        LastName = "Granger",
+        HouseId = gripphendor.Id
+    }
+});
+
+var course1 = context.Courses.Add(new Course
+{
+    Title = "Transfiguration",
+    ShortCode = "TFG"
+}).Entity;
+
+context.TimeTables.AddRange(new TimeTable[] 
+{
+    new TimeTable
     {
-        Username = "HermonieG",
-        Email = "hermonie.granger@hogwarts.uk",
-        Password = "idJcZF68uqx4sn3F47S7a7dDJqDM7F",
-        Blogs = new List<Blog>
-        {
-            new Blog
-            {
-                Title = "Proof of alternate universes",
-                Posts = new List<Post> 
-                {
-                    new Post(), 
-                    new Post(),
-                    new Post(),
-                }
-            },
-            new Blog
-            {
-                Title = "Missed muggle influences in the magical world",
-                Posts = new List<Post>
-                {
-                    new Post(),
-                    new Post(),
-                    new Post(),
-                    new Post()
-                }
-            }
-        }
+        TeacherId = teacher1.Id,
+        StudentId = student1.Id,
+        CourseId = course1.Id,
     }
 });
 
 context.SaveChanges();
 
-// TODO:    Find a nice way to project entities 
-//          with foreign relations to views.
-var blog = context.Blogs.AsNoTracking()
-    .Where(blog => blog.Id == 1)
-    //.Select(BlogMapper.Projection)
-    .SingleOrDefault();
-
-
-
 public class MyContext : DbContext
 {
-    public DbSet<Blog> Blogs => Set<Blog>();
-    public DbSet<Post> Posts => Set<Post>();
-    public DbSet<User> Users => Set<User>();
+    public DbSet<House> Houses => Set<House>();
+    public DbSet<Person> Persons => Set<Person>();
+    public DbSet<Course> Courses => Set<Course>();
+    public DbSet<TimeTable> TimeTables => Set<TimeTable>();
 
     public MyContext()
         : base() 
@@ -134,79 +112,61 @@ public class MyContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<User>(entity =>
+        modelBuilder.Entity<Person>(entity =>
         {
-            entity.Property(user => user.Username)
-                .IsRequired();
-
-            entity.HasIndex(user => user.Email)
-                .IsUnique();
-
-            entity.Property(user => user.Password)
-                .IsRequired();
-        });
-        
-        modelBuilder.Entity<Blog>(entity =>
-        {
-            entity.Property(blog => blog.Title)
-                .IsRequired();
-            
-            // entity.Property(blog => blog.CreatedDate)
-            //     .HasDefaultValueSql("getdate()");
-            
-            entity.HasOne(blog => blog.CreatedBy)
-                .WithMany(user => user.Blogs)
-                .HasForeignKey(blog => blog.CreatedById);
+            entity.HasOne(person => person.House)
+                .WithMany(house => house.Persons)
+                .HasForeignKey(person => person.HouseId);
         });
 
-        modelBuilder.Entity<Post>(entity =>
+        modelBuilder.Entity<TimeTable>(entity =>
         {
-            //entity.Property(post => post.CreatedDate)
-            //    .HasDefaultValueSql("getdate()");
-
-            entity.HasOne(post => post.Blog)
-                .WithMany(blog => blog.Posts)
-                .HasForeignKey(post => post.BlogId);
+            entity.HasKey(timeTable => new 
+            {
+                timeTable.TeacherId,
+                timeTable.StudentId, 
+                timeTable.CourseId, 
+                timeTable.DateTime
+            });
         });
     }
 }
 
-public class Blog
+public class House
 {
-    public int Id { get; set; }
-    public string Title { get; set; } = string.Empty;
+    public Guid Id { get; set; }
+    public string Name { get; set; }
 
-    public DateTime CreatedDate { get; set; }
-    public int CreatedById { get; set; }
-    public User CreatedBy { get; set; } = null!;
-
-    public List<Post> Posts { get; set; } = new List<Post>();
+    public ICollection<Person> Persons { get; set; }
 }
 
-public class Post
+public class Person 
 {
-    public int Id { get; set; }
+    public Guid Id { get; set; }
 
-    public DateTime CreatedDate { get; set; }
-    public int CreatedById { get; set; }
-    public User CreatedBy { get; set; } = null!;
+    public string FirstName { get; set;}
+    public string? MiddleName { get; set; }
+    public string? LastNamePrefix { get; set; }
+    public string LastName { get; set; }
 
-    public int BlogId { get; set; }
-    public Blog Blog { get; set; } = null!;
-    
+    public Guid HouseId { get; set; }
+    public House House { get; set; }
 }
 
-public class User
+public class Course 
 {
-    public int Id { get; set; }
-    public string Username { get; set; } = string.Empty;
-    public string Email { get; set; } = string.Empty;
-    public string Password { get; set; } = string.Empty;
-
-    public List<Blog> Blogs { get; set; } = new List<Blog>();
+    public Guid Id { get; set; }
+    public string Title { get; set; }
+    public string ShortCode { get; set; }
 }
 
-// public static class BlogMapper
-// {
-//     public Expression<Func<Blog, BlogView>> Projection { get; set; }
-// }
+public class TimeTable
+{
+    public Guid TeacherId { get; set; }
+    public Person Teacher { get; set; }
+    public Guid StudentId { get; set; }
+    public Person Student { get; set; }
+    public Guid CourseId { get; set; }
+    public Course Course { get; set; }
+    public DateTime DateTime { get; set; }
+}
